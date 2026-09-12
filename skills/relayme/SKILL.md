@@ -6,17 +6,50 @@ license: MIT
 
 # RelayMe
 
-Use this skill when a person who cannot comfortably use the phone needs one
-everyday, voice-only task done: asking a shop whether an item is in stock,
-asking a clinic whether a prescription is ready for pickup, confirming opening
-hours, asking a landlord a yes/no question. The user types the task. RelayMe
-places **one** disclosed CALL-E call, has the conversation on their behalf, and
-returns the answer as text.
+A Deaf father wants to know if his daughter's prescription is ready before he
+drives across town to a pharmacy with no website and no online refill. He cannot
+make that call. His options today are to wait for a relay operator to join the
+line, or to ask a hearing person for a favour. RelayMe is a third option: he
+types the question, an AI assistant makes the call, and the whole conversation
+comes back to him as a text thread with the answer at the bottom.
+
+Use this skill when a deaf, hard-of-hearing, or non-speaking person needs one
+everyday, voice-only task done: is a prescription ready, is an item in stock,
+what are today's hours, a yes/no question to an office that only takes calls. The
+user types the task. RelayMe places **one** disclosed CALL-E call, has the
+conversation on their behalf, and returns it as a readable thread plus a
+fail-closed structured result.
 
 RelayMe is a text-first alternative to a telecommunications relay service (711
-in the US). Unlike a relay operator, no human hears the call; unlike live relay,
-the user does not read and type in real time while the call happens; and the
-result is a structured answer, not a raw transcript.
+in the US), built for its known friction:
+
+- **No human operator.** A relay operator hears every word of a medical or
+  banking call. RelayMe has none; the conversation is between the AI and the
+  business only.
+- **No hang-ups.** Businesses routinely hang up on relay calls they do not
+  recognise. The RelayMe agent speaks naturally in real time, so the callee has
+  an ordinary conversation.
+- **Not synchronous.** The user does not sit and type through the call. They
+  state the task once and read the result when it is done.
+- **An answer, not a transcript.** The result is structured and fail-closed, not
+  raw speech to interpret.
+
+## What the user sees
+
+The call is delivered as a conversation thread (`apps/python/relayme/thread.py`),
+rendered in a phone-style chat view (`apps/python/relayme/web/relayme.html`):
+
+```
+You      Is my prescription at Maple Street Pharmacy ready?
+RelayMe  I'll call and say I'm an AI assistant calling for you. You'll see it all.
+Agent    Is the prescription for Jordan Rivera ready for pickup?
+Them     Yes, ready at the pickup counter, any time before 8 PM.
+RelayMe  Here's your answer: it's ready, collect before 8 PM today.
+```
+
+The user's own spoken sensitive details (a phone number or email they asked to
+be passed on) are redacted from the thread before display, since it may be shown
+on a shared screen and the callee never consented to the call.
 
 ## When To Use
 
@@ -65,11 +98,30 @@ Optional:
 No CALL-E credentials, no network. From the repository root:
 
 ```
-python3 apps/python/relayme/client.py --task skills/relayme/assets/sample-task.json --mock
+python3 apps/python/relayme/client.py --task skills/relayme/assets/sample-task.json --mock --thread
 ```
 
-The preview prints a masked phone number, the exact CALL-E goal text, the
-question, and the result schema. It does not dial.
+This reserves the task (reserve-before-dial), replays a fixture transcript, runs
+it through the same classifier the live path uses, and prints the user-facing
+text thread. It does not dial. Running the same `task_id` twice is refused rather
+than dialling again.
+
+Try the hard cases to see it fail closed (never a fabricated answer):
+
+```
+python3 apps/python/relayme/client.py --task skills/relayme/assets/sample-task.json --mock \
+  --fixture apps/python/relayme/fixtures/hedged.json --thread
+# also: voicemail.json, refused.json, wrong_number.json
+```
+
+Emit the thread for the web view and open it in a browser:
+
+```
+python3 apps/python/relayme/client.py --task skills/relayme/assets/sample-task.json --mock \
+  --emit-thread-json /tmp/thread.json
+# open apps/python/relayme/web/relayme.html (ships with embedded demo scenarios,
+# or load /tmp/thread.json via the file picker)
+```
 
 ## CALL-E Goal Template
 
