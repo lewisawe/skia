@@ -18,6 +18,10 @@ npm-debug.log*
 # CALL-E local cache (tokens, pending logins, recovery records)
 .calle-mcp/
 
+# RelayMe runtime reservation store (reserve-before-dial state)
+.reservations.json
+apps/python/relayme/.reservations.json
+
 # OS
 .DS_Store
 Thumbs.db
