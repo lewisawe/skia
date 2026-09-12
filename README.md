@@ -34,10 +34,32 @@ handles the everyday calls that voice-only businesses still force onto the phone
 skills/relayme/           The reusable CALL-E agent skill (the core contribution)
   SKILL.md                What it does, when to use it, the call goal, result schema
   references/             Safety and worked examples
-  scripts/                Local helpers and validation
-  assets/                 Sample task definitions
+  assets/                 Sample task definition
 apps/python/relayme/      A runnable demo of the skill
-  fixtures/               No-call mock transcripts so the demo runs with no credentials
+  client.py               Mock-default runner; live path drives calle plan/run/status
+  thread.py               Turns a call into the deaf-user text thread
+  dispatch.py             Reserve-before-dial + fail-closed result classifier
+  fixtures/               No-call transcripts: answered, unsure, refused, voicemail, wrong number
+  web/relayme.html        Single-file accessible chat view (the demo surface)
+  test_*.py               38 no-network tests
+docs/demo-script.md       3-minute demo video script
+```
+
+## Quickstart (no calls, no credentials)
+
+```
+python3 apps/python/relayme/client.py --task skills/relayme/assets/sample-task.json --mock --thread
+```
+
+See the call rendered as a chat: open `apps/python/relayme/web/relayme.html` in a
+browser. It ships with five embedded demo scenarios.
+
+Run the tests:
+
+```
+python3 apps/python/relayme/test_dispatch.py
+python3 apps/python/relayme/test_thread.py
+python3 apps/python/relayme/test_client.py
 ```
 
 ## Status
