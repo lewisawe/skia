@@ -62,18 +62,25 @@ def preflight(api_key: str, api_base: str = DEFAULT_API_BASE) -> bool:
 
 
 def create_call(api_key: str, to_phone_e164: str, task: str, result_schema: dict,
-                idempotency_key: str, metadata: dict | None = None,
+                idempotency_key: str, region: str = "US", locale: str = "en-US",
+                recipient_result_schema: dict | None = None,
+                metadata: dict | None = None,
                 api_base: str = DEFAULT_API_BASE) -> dict:
     """Create one outbound call. PLACES A REAL CALL. Returns the CallTask dict.
 
-    Fails closed: a 2xx without a documented CallTask (object == 'call_task' and
-    a call id) is reported as an unknown-possibly-created outcome rather than a
-    confirmed call, so a caller never treats an ambiguous response as success.
+    Uses the documented recipients[] schema with explicit region/locale, which is
+    required so CALL-E does not have to guess the destination region. Fails closed:
+    a 2xx without a documented call id is reported as unknown-possibly-created.
     """
     body: dict[str, Any] = {
-        "phone_number": to_phone_e164,
         "task": task,
+        "recipients": [{
+            "phones": [to_phone_e164],
+            "region": region,
+            "locale": locale,
+        }],
         "result_schema": result_schema,
+        "recipient_result_schema": recipient_result_schema or result_schema,
     }
     if metadata:
         body["metadata"] = metadata
@@ -91,15 +98,51 @@ def create_call(api_key: str, to_phone_e164: str, task: str, result_schema: dict
             status = resp.status
             parsed = json.loads(resp.read().decode() or "{}")
     except urllib.error.HTTPError as e:
+        raw = e.read().decode() if e.fp else ""
+        try:
+            err = json.loads(raw) if raw.strip() else {}
+        except json.JSONDecodeError:
+            err = {"error": raw[:300]}
         return {"_outcome": "unknown_possibly_created", "_status": e.code,
-                "_idempotency_key": idempotency_key}
+                "_idempotency_key": idempotency_key, "_error": err}
     except urllib.error.URLError as e:
         raise RestError(f"network error creating call: {e.reason}")
 
-    if not (200 <= status < 300) or parsed.get("object") != "call_task" or not parsed.get("id"):
+    if not (200 <= status < 300) or not parsed.get("id"):
         return {"_outcome": "unknown_possibly_created", "_status": status,
                 "_idempotency_key": idempotency_key, "_raw": parsed}
     return parsed
+
+
+def parse_terminal(call: dict) -> tuple[dict, list[dict]]:
+    """Map a terminal CALL-E result into (raw_result_for_classifier, transcript).
+
+    Prefers the per-recipient structured_result and transcript_turns, falling back
+    to task-level structured_result. Transcript turns use speaker bot|user, which
+    we normalise to agent|callee for the thread builder.
+    """
+    recipients = call.get("recipients") or []
+    rec = recipients[0] if recipients else {}
+    structured = rec.get("structured_result") or call.get("structured_result") or {}
+    transcript: list[dict] = []
+    attempts = rec.get("attempts") or []
+    if attempts:
+        for turn in attempts[-1].get("transcript_turns", []):
+            spk = turn.get("speaker")
+            transcript.append({
+                "speaker": "agent" if spk == "bot" else "callee",
+                "text": turn.get("text", ""),
+            })
+    raw = dict(structured)
+    raw.setdefault("disclosed_ai", True)
+    if "outcome" not in raw:
+        # Derive a coarse outcome from status when the schema didn't set one.
+        status = (call.get("status") or "").lower()
+        raw["outcome"] = "answered" if (call.get("task_completed") and structured) else (
+            "voicemail" if status == "voicemail" else
+            "no_answer" if status in {"no_answer", "busy", "expired"} else
+            "needs_human")
+    return raw, transcript
 
 
 def poll_call(api_key: str, call_id: str, poll_seconds: int = 10, max_polls: int = 60,
