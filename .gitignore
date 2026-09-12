@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# CALL-E local cache (tokens, pending logins, recovery records)
+.calle-mcp/
+
+# OS
+.DS_Store
+Thumbs.db
